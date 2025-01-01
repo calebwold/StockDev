@@ -159,25 +159,28 @@ if "stock_data" in st.session_state:
     st.subheader("AI-Powered Analysis")
     if st.button("Run AI Analysis"):
         with st.spinner("Analyzing the chart, please wait..."):
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-                fig.write_image(tmpfile.name)
-                tmpfile_path = tmpfile.name
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+                    fig.write_image(tmpfile.name)
+                    tmpfile_path = tmpfile.name
 
-            with open(tmpfile_path, "rb") as image_file:
-                image_data = base64.b64encode(image_file.read()).decode('utf-8')
+                with open(tmpfile_path, "rb") as image_file:
+                    image_data = base64.b64encode(image_file.read()).decode('utf-8')
 
-            messages = [{
-                'role': 'user',
-                'content': """You are a Stock Trader specializing in Technical Analysis at a top financial institution.
-                            Analyze the stock chart's technical indicators and provide a buy/hold/sell recommendation.
-                            Base your recommendation only on the candlestick chart and the displayed technical indicators.
-                            First, provide the recommendation, then, provide your detailed reasoning.
-                """,
-                'images': [image_data]
-            }]
-            response = ollama.chat(model='llama3.2-vision', messages=messages)
+                messages = [{
+                    'role': 'user',
+                    'content': """You are a Stock Trader specializing in Technical Analysis at a top financial institution.
+                                Analyze the stock chart's technical indicators and provide a buy/hold/sell recommendation.
+                                Base your recommendation only on the candlestick chart and the displayed technical indicators.
+                                First, provide the recommendation, then, provide your detailed reasoning.
+                    """,
+                    'images': [image_data]
+                }]
+                response = ollama.chat(model='llama3.2-vision', messages=messages)
 
-            st.write("**AI Analysis Results:**")
-            st.write(response["message"]["content"])
+                st.write("**AI Analysis Results:**")
+                st.write(response["message"]["content"])
 
-            os.remove(tmpfile_path)
+                os.remove(tmpfile_path)
+            except Exception as e:
+                st.error(f"Error with AI analysis: {e}")
