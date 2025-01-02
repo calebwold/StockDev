@@ -30,7 +30,7 @@ api_key = '161a02f55af96a556113c9c2379c3f69'
 
 # Streamlit app setup
 st.set_page_config(layout="wide")
-st.title("AI Trader: An AI Stock Forecasting Application")
+st.title("StockForecastX: An AI Stock Forecasting Application")
 
 # Weather input
 st.sidebar.header("Weather Settings")
