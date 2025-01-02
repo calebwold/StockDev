@@ -34,7 +34,7 @@ st.title("AI Trader: An AI Stock Forecasting Application")
 
 # Weather input
 st.sidebar.header("Weather Settings")
-weather_city = st.sidebar.text_input("Enter City for Weather Info:", "New York")
+weather_city = st.sidebar.text_input("Enter City for Weather Info:", "Denver")
 
 # Fetch and display weather
 weather_info = get_weather(weather_city, api_key)
@@ -155,6 +155,7 @@ if "stock_data" in st.session_state:
     fig.update_layout(xaxis_rangeslider_visible=False)
     st.plotly_chart(fig)
 
+
     # AI-powered analysis button
     st.subheader("AI-Powered Analysis")
     if st.button("Run AI Analysis"):
@@ -183,4 +184,4 @@ if "stock_data" in st.session_state:
 
                 os.remove(tmpfile_path)
             except Exception as e:
-                st.error(f"Error with AI analysis: {e}")
+                st.error(f"Error with AI analysis please try again later")
