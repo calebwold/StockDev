@@ -9,26 +9,6 @@ import os
 from prophet import Prophet
 import requests
 
-password = "123Awol!"  # Set your password here
-
-# Streamlit app setup
-st.set_page_config(layout="wide")
-st.title("StockForecastX: An AI Stock Forecasting Application")
-
-# Displaying maintenance message
-st.markdown("### 🚧 This app is currently undergoing updates. Please check back soon! 🚧")
-
-# Password input
-input_password = st.text_input("Enter password to access the app:", type="password")
-
-# Check if the entered password matches
-if input_password == password:
-    st.success("Password correct! Welcome to the app.")
-    # Add the rest of your app code here for users who entered the correct password
-else:
-    st.warning("Incorrect password. Please try again.")
-    st.stop()  # Stops the app from continuing if the password is incorrect
-
 # Function to get weather data
 def get_weather(city, api_key):
     try:
@@ -45,8 +25,12 @@ def get_weather(city, api_key):
     except Exception as e:
         return f"Error fetching weather data: {e}"
 
-# API key for OpenWeatherMap
+
 api_key = '161a02f55af96a556113c9c2379c3f69'
+
+# Streamlit app setup
+st.set_page_config(layout="wide")
+st.title("StockForecastX: An AI Stock Forecasting Application")
 
 # Weather input
 st.sidebar.header("Weather Settings")
@@ -111,6 +95,10 @@ if "stock_data" in st.session_state:
     href = f'<a href="data:file/csv;base64,{b64}" download="forecast.csv">Download Forecast as CSV</a>'
     st.markdown(href, unsafe_allow_html=True)
 
+    # Show the next day prediction
+    next_day_prediction = forecast.iloc[-forecast_period]
+    st.sidebar.write(f"Next Day Prediction: {next_day_prediction['yhat']:.2f}")
+
     # Create and plot candlestick chart
     fig = go.Figure(data=[
         go.Candlestick(
@@ -132,11 +120,68 @@ if "stock_data" in st.session_state:
         line=dict(dash='dot', color='orange')
     ))
 
+    # Adding selected technical indicators
+    def add_indicator(indicator):
+        if indicator == "20-Day SMA":
+            sma = data['Close'].rolling(window=20).mean()
+            fig.add_trace(go.Scatter(x=data.index, y=sma, mode='lines', name='SMA (20)'))
+        elif indicator == "20-Day EMA":
+            ema = data['Close'].ewm(span=20).mean()
+            fig.add_trace(go.Scatter(x=data.index, y=ema, mode='lines', name='EMA (20)'))
+        elif indicator == "20-Day Bollinger Bands":
+            sma = data['Close'].rolling(window=20).mean()
+            std = data['Close'].rolling(window=20).std()
+            bb_upper = sma + 2 * std
+            bb_lower = sma - 2 * std
+            fig.add_trace(go.Scatter(x=data.index, y=bb_upper, mode='lines', name='BB Upper'))
+            fig.add_trace(go.Scatter(x=data.index, y=bb_lower, mode='lines', name='BB Lower'))
+        elif indicator == "VWAP":
+            data['VWAP'] = (data['Close'] * data['Volume']).cumsum() / data['Volume'].cumsum()
+            fig.add_trace(go.Scatter(x=data.index, y=data['VWAP'], mode='lines', name='VWAP'))
+
+    # Sidebar options for technical indicators
+    st.sidebar.subheader("Technical Indicators")
+    indicators = st.sidebar.multiselect(
+        "Select Indicators:",
+        ["20-Day SMA", "20-Day EMA", "20-Day Bollinger Bands", "VWAP"],
+        default=["20-Day SMA"]
+    )
+
+    # Add selected indicators to the chart
+    for indicator in indicators:
+        add_indicator(indicator)
+
     # Display the plot
     fig.update_layout(xaxis_rangeslider_visible=False)
     st.plotly_chart(fig)
 
+
     # AI-powered analysis button
     st.subheader("AI-Powered Analysis")
     if st.button("Run AI Analysis"):
-        st.error("AI analysis functionality is currently under construction.")
+        with st.spinner("Analyzing the chart, please wait..."):
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+                    fig.write_image(tmpfile.name)
+                    tmpfile_path = tmpfile.name
+
+                with open(tmpfile_path, "rb") as image_file:
+                    image_data = base64.b64encode(image_file.read()).decode('utf-8')
+
+                messages = [{
+                    'role': 'user',
+                    'content': """You are a Stock Trader specializing in Technical Analysis at a top financial institution.
+                                Analyze the stock chart's technical indicators and provide a buy/hold/sell recommendation.
+                                Base your recommendation only on the candlestick chart and the displayed technical indicators.
+                                First, provide the recommendation, then, provide your detailed reasoning.
+                    """,
+                    'images': [image_data]
+                }]
+                response = ollama.chat(model='llama3.2-vision', messages=messages)
+
+                st.write("**AI Analysis Results:**")
+                st.write(response["message"]["content"])
+
+                os.remove(tmpfile_path)
+            except Exception as e:
+                st.error(f"Error with AI analysis please try again later")
