@@ -94,7 +94,12 @@ if "stock_data" in st.session_state:
     b64 = base64.b64encode(csv.encode()).decode()  
     href = f'<a href="data:file/csv;base64,{b64}" download="forecast.csv">Download Forecast as CSV</a>'
     st.markdown(href, unsafe_allow_html=True)
-    # Create candlestick chart
+
+    # Show the next day prediction
+    next_day_prediction = forecast.iloc[-forecast_period]
+    st.sidebar.write(f"Next Day Prediction: {next_day_prediction['yhat']:.2f}")
+
+    # Create and plot candlestick chart
     fig = go.Figure(data=[
         go.Candlestick(
             x=data.index,
@@ -105,8 +110,8 @@ if "stock_data" in st.session_state:
             name="Candlestick"
         )
     ])
-    
-    forecast['ds'] = pd.to_datetime(forecast['ds'])
+
+    # Add forecasted price as dotted line
     fig.add_trace(go.Scatter(
         x=forecast['ds'],
         y=forecast['yhat'],
@@ -115,30 +120,26 @@ if "stock_data" in st.session_state:
         line=dict(dash='dot', color='orange')
     ))
 
-    # Define indicator function
-    def add_indicator(indicator, data, fig):
+    # Adding selected technical indicators
+    def add_indicator(indicator):
         if indicator == "20-Day SMA":
-            if "Close" in data.columns:
-                sma = data['Close'].rolling(window=20).mean()
-                fig.add_trace(go.Scatter(x=data.index, y=sma, mode='lines', name='SMA (20)'))
+            sma = data['Close'].rolling(window=20).mean()
+            fig.add_trace(go.Scatter(x=data.index, y=sma, mode='lines', name='SMA (20)'))
         elif indicator == "20-Day EMA":
-            if "Close" in data.columns:
-                ema = data['Close'].ewm(span=20).mean()
-                fig.add_trace(go.Scatter(x=data.index, y=ema, mode='lines', name='EMA (20)'))
+            ema = data['Close'].ewm(span=20).mean()
+            fig.add_trace(go.Scatter(x=data.index, y=ema, mode='lines', name='EMA (20)'))
         elif indicator == "20-Day Bollinger Bands":
-            if "Close" in data.columns:
-                sma = data['Close'].rolling(window=20).mean()
-                std = data['Close'].rolling(window=20).std()
-                bb_upper = sma + 2 * std
-                bb_lower = sma - 2 * std
-                fig.add_trace(go.Scatter(x=data.index, y=bb_upper, mode='lines', name='BB Upper'))
-                fig.add_trace(go.Scatter(x=data.index, y=bb_lower, mode='lines', name='BB Lower'))
+            sma = data['Close'].rolling(window=20).mean()
+            std = data['Close'].rolling(window=20).std()
+            bb_upper = sma + 2 * std
+            bb_lower = sma - 2 * std
+            fig.add_trace(go.Scatter(x=data.index, y=bb_upper, mode='lines', name='BB Upper'))
+            fig.add_trace(go.Scatter(x=data.index, y=bb_lower, mode='lines', name='BB Lower'))
         elif indicator == "VWAP":
-            if "Close" in data.columns and "Volume" in data.columns:
-                data['VWAP'] = (data['Close'] * data['Volume']).cumsum() / data['Volume'].cumsum()
-                fig.add_trace(go.Scatter(x=data.index, y=data['VWAP'], mode='lines', name='VWAP'))
+            data['VWAP'] = (data['Close'] * data['Volume']).cumsum() / data['Volume'].cumsum()
+            fig.add_trace(go.Scatter(x=data.index, y=data['VWAP'], mode='lines', name='VWAP'))
 
-    # Sidebar indicator selection
+    # Sidebar options for technical indicators
     st.sidebar.subheader("Technical Indicators")
     indicators = st.sidebar.multiselect(
         "Select Indicators:",
@@ -146,40 +147,41 @@ if "stock_data" in st.session_state:
         default=["20-Day SMA"]
     )
 
-    # Add indicators to the plot
+    # Add selected indicators to the chart
     for indicator in indicators:
-        add_indicator(indicator, data, fig)
+        add_indicator(indicator)
 
-    # Display chart
+    # Display the plot
     fig.update_layout(xaxis_rangeslider_visible=False)
     st.plotly_chart(fig)
 
-# AI-powered analysis button
-st.subheader("AI-Powered Analysis")
-if st.button("Run AI Analysis"):
-    with st.spinner("Analyzing the chart, please wait..."):
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-                fig.write_image(tmpfile.name)
-                tmpfile_path = tmpfile.name
 
-            with open(tmpfile_path, "rb") as image_file:
-                image_data = base64.b64encode(image_file.read()).decode('utf-8')
+    # AI-powered analysis button
+    st.subheader("AI-Powered Analysis")
+    if st.button("Run AI Analysis"):
+        with st.spinner("Analyzing the chart, please wait..."):
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+                    fig.write_image(tmpfile.name)
+                    tmpfile_path = tmpfile.name
 
-            messages = [{
-                'role': 'user',
-                'content': """You are a Stock Trader specializing in Technical Analysis at a top financial institution.
-                            Analyze the stock chart's technical indicators and provide a buy/hold/sell recommendation.
-                            Base your recommendation only on the candlestick chart and the displayed technical indicators.
-                            First, provide the recommendation, then, provide your detailed reasoning.
-                """,
-                'images': [image_data]
-            }]
-            response = ollama.chat(model='llama3.2-vision', messages=messages)
+                with open(tmpfile_path, "rb") as image_file:
+                    image_data = base64.b64encode(image_file.read()).decode('utf-8')
 
-            st.write("**AI Analysis Results:**")
-            st.write(response["message"]["content"])
+                messages = [{
+                    'role': 'user',
+                    'content': """You are a Stock Trader specializing in Technical Analysis at a top financial institution.
+                                Analyze the stock chart's technical indicators and provide a buy/hold/sell recommendation.
+                                Base your recommendation only on the candlestick chart and the displayed technical indicators.
+                                First, provide the recommendation, then, provide your detailed reasoning.
+                    """,
+                    'images': [image_data]
+                }]
+                response = ollama.chat(model='llama3.2-vision', messages=messages)
 
-            os.remove(tmpfile_path)
-        except Exception as e:
-            st.error(f"Error with AI analysis, please try again later")
+                st.write("**AI Analysis Results:**")
+                st.write(response["message"]["content"])
+
+                os.remove(tmpfile_path)
+            except Exception as e:
+                st.error(f"Error with AI analysis please try again later")
